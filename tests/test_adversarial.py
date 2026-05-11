@@ -413,6 +413,34 @@ class TestRulesAdversarial:
         errs = [i for i in validate(e) if i.level == "ERROR"]
         assert len(errs) == 0  # 4 terms with bref is fine
 
+    def test_multi_line_o_no_w024_spam(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth\n%o A000001 (Python)\n%o A000001 def f(n):\n%o A000001     return n+1"
+        e = entry_from_text(text)
+        warns = [i for i in validate(e) if i.level == "WARNING"]
+        o_warns = [w for w in warns if w.field == "%o"]
+        w024_warns = [w for w in o_warns if w.code == "W024"]
+        assert len(w024_warns) == 0  # no language-label spam on continuations
+
+    def test_changed_keyword_gives_info_not_warning(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn,changed\n%A A000001 Auth"
+        e = entry_from_text(text)
+        warns = [i for i in validate(e) if i.level == "WARNING"]
+        infos = [i for i in validate(e) if i.level == "INFO"]
+        kw_warns = [w for w in warns if w.field == "%K"]
+        kw_infos = [i for i in infos if i.field == "%K" and "server" in i.message]
+        assert len(kw_warns) == 0  # not flagged as unrecognized
+        assert len(kw_infos) >= 1  # flagged as server-managed
+
+    def test_hear_keyword_gives_info_not_warning(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn,hear\n%A A000001 Auth"
+        e = entry_from_text(text)
+        warns = [i for i in validate(e) if i.level == "WARNING"]
+        infos = [i for i in validate(e) if i.level == "INFO"]
+        kw_warns = [w for w in warns if w.field == "%K"]
+        kw_infos = [i for i in infos if i.field == "%K" and "server" in i.message]
+        assert len(kw_warns) == 0
+        assert len(kw_infos) >= 1
+
 
 # ==============================================================
 # CLI adversarial

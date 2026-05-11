@@ -8,6 +8,11 @@ from oeis_validator.models import Issue, OEISEntry
 
 WarningFunc = Callable[[str, str], None]
 
+SERVER_KEYWORDS: set[str] = {
+    "changed",
+    "hear",
+}
+
 VALID_KEYWORDS: set[str] = {
     "base",
     "bref",
@@ -37,8 +42,6 @@ VALID_KEYWORDS: set[str] = {
     "unkn",
     "walk",
     "word",
-    "changed",
-    "hear",
 }
 
 KNOWN_TAGS: set[str] = {
@@ -251,7 +254,7 @@ def validate(entry: OEISEntry) -> list[Issue]:
             )
 
         data_chars = len(",".join(entry.sequence_terms))
-        if data_chars < 120 and len(entry.sequence_terms) >= 4:
+        if data_chars < 260 and len(entry.sequence_terms) >= 4:
             info(
                 "%S/%T/%U",
                 f"Only {data_chars} chars of data. "
@@ -319,7 +322,7 @@ def validate(entry: OEISEntry) -> list[Issue]:
     if "O" not in entry.fields:
         err("%O", "Offset line (%O) is required.", "E011")
     else:
-        raw_o = entry.fields["O"][0]
+        raw_o = entry.fields["O"][-1]
         if "," not in raw_o:
             warn(
                 "%O",
@@ -354,7 +357,9 @@ def validate(entry: OEISEntry) -> list[Issue]:
         err("%K", "Keywords line (%K) is required.", "E013")
     else:
         for k in entry.keywords:
-            if k not in VALID_KEYWORDS:
+            if k in SERVER_KEYWORDS:
+                info("%K", f"Keyword '{k}' is server-managed — do not submit manually.", "I026")
+            elif k not in VALID_KEYWORDS:
                 warn("%K", f"Unrecognized keyword: '{k}'.", "W010")
 
         has_nonn = "nonn" in kw
@@ -443,17 +448,17 @@ def validate(entry: OEISEntry) -> list[Issue]:
             err("%A", "Author field must not be empty.", "E019")
         elif not re.search(r"[A-Za-z]{2,}", author):
             warn("%A", "Author field does not appear to contain a name.", "W012")
-        elif re.fullmatch(r"[\w.+\-]+(AT|@)[\w.\-]+", author.strip()):
+        elif re.search(r"[\w.+\-]+(AT|@)[\w.\-]+", author):
             warn(
                 "%A",
-                "Author field appears to contain only an email; a name is expected.",
+                "Author field appears to contain an email address — remove it.",
                 "W013",
             )
 
     # ---- %F ----------------------------------------------------------------
     for formula in entry.fields.get("F", []):
-        if re.search(r"\ba_\d\b|a\[n\]", formula):
-            warn("%F", "Use a(n) notation, not a_n or a[n].", "W014")
+        if re.search(r"a\[n\]", formula):
+            warn("%F", "Use a(n) notation, not a[n].", "W014")
         if re.search(r"\bx\b", formula) and not re.search(
             r"\b(G\.f|E\.g\.f|g\.f|e\.g\.f)[\.:]\s*", formula
         ):
@@ -589,17 +594,26 @@ def validate(entry: OEISEntry) -> list[Issue]:
             )
 
     # ---- %o  Other programs ------------------------------------------------
-    for prog in entry.fields.get("o", []):
-        if not LANG_PREFIX_RE.match(prog):
+    o_lines = entry.fields.get("o", [])
+    in_block = False
+    for prog in o_lines:
+        has_lang = bool(LANG_PREFIX_RE.match(prog))
+        if has_lang:
+            in_block = True
+            has_comment = bool(re.search(r"(#|//|/\*|--|\\\\ |;;|%)", prog))
+            if not has_comment or not YEAR_RE.search(prog):
+                info("%o", "Program in %o appears to lack a comment/signature.", "I025")
+        elif not in_block:
+            in_block = True
             warn(
                 "%o",
                 f"Program in %o must start with a language label, "
                 f"e.g. '(PARI)' or '(Python)'. Got: '{prog[:40]}'.",
                 "W024",
             )
-        has_comment = bool(re.search(r"(#|//|/\*|--|\\\\ |;;|%)", prog))
-        if not has_comment or not YEAR_RE.search(prog):
-            info("%o", "Program in %o appears to lack a comment/signature.", "I025")
+            has_comment = bool(re.search(r"(#|//|/\*|--|\\\\ |;;|%)", prog))
+            if not has_comment or not YEAR_RE.search(prog):
+                info("%o", "Program in %o appears to lack a comment/signature.", "I025")
 
     # ---- global ------------------------------------------------------------
     if any("\t" in raw for raw in entry.raw_lines):

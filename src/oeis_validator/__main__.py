@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 
 from oeis_validator.demo import DEMO_BAD, DEMO_GOOD
 from oeis_validator.parser import parse_entries, parse_entry
 from oeis_validator.reporter import print_coverage, report
 from oeis_validator.rules import validate
 
+if TYPE_CHECKING:
+    from oeis_validator.models import Issue
+
 
 def _filter_issues(
-    issues: list,
+    issues: list[Issue],
     no_error: bool = False,
     no_warning: bool = False,
     no_info: bool = False,
-) -> list:
+) -> list[Issue]:
     return [
         i
         for i in issues

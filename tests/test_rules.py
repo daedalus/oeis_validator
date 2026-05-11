@@ -186,10 +186,10 @@ class TestAuthorField:
 class TestFormulaField:
     def test_a_n_notation_in_formula(self) -> None:
         e = entry_from_text(
-            "%I A000001\n%S A000001 1,2,3,4\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth\n%F A000001 a_0 = n"
+            "%I A000001\n%S A000001 1,2,3,4\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth\n%F A000001 a[n] = n"
         )
         warns = [i for i in validate(e) if i.level == "WARNING"]
-        assert any("a(n)" in i.message for i in warns)
+        assert any("a[n]" in i.message for i in warns)
 
 
 class TestLinkField:

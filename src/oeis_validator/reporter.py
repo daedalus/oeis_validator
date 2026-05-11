@@ -5,6 +5,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from oeis_validator.models import Issue, OEISEntry
 
+try:
+    from importlib.metadata import version as _pkg_version
+
+    _VERSION = _pkg_version("oeis-validator")
+except Exception:
+    _VERSION = "0.1.0"
+
 COVERAGE_TABLE: list[tuple[str, str, str]] = [
     ("PARSER", "%I required", "COVERED"),
     ("PARSER", "A-number = A + 6 digits", "COVERED"),
@@ -133,7 +140,7 @@ def report(entry: OEISEntry, issues: list[Issue]) -> int:
     infos = [i for i in issues if i.level == "INFO"]
 
     anum = entry.a_number or "(unknown)"
-    print(f"═══ OEIS Validator v0.1.0 — {anum} ═══")
+    print(f"═══ OEIS Validator v{_VERSION} — {anum} ═══")
     if entry.name:
         print(f"    Name    : {entry.name[:90]}")
     preview = ", ".join(entry.sequence_terms[:10])
