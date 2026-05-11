@@ -8,8 +8,21 @@ for compliance, consistency, and style adherence.
 [![Python](https://img.shields.io/pypi/pyversions/oeis_validator.svg)](https://pypi.org/project/oeis_validator/)
 [![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/daedalus/oeis_validator)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/master/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Tests](https://img.shields.io/badge/tests-218%20passing-brightgreen.svg)](https://github.com/daedalus/oeis_validator)
+[![Tests](https://img.shields.io/badge/tests-221%20passing-brightgreen.svg)](https://github.com/daedalus/oeis_validator)
 [![DeepWiki](https://img.shields.io/badge/docs-DeepWiki-blue.svg)](https://deepwiki.com/daedalus/oeis_validator)
+
+## Architecture
+
+The validator operates as a linear pipeline:
+
+```
+Raw text → Parser → OEISEntry → Rules Engine → list[Issue] → Reporter → Report
+```
+
+- **Parser** (`parser.py`) — identifies OEIS field tags via regex, aggregates multi-line fields, normalizes sequence data into integers
+- **Data Models** (`models.py`) — `OEISEntry` holds parsed state (A-number, terms, offsets, keywords); `Issue` represents a single finding with level and code
+- **Rules Engine** (`rules.py`) — 90+ checks for structural requirements, keyword logic, style patterns, notation conventions
+- **Reporter & CLI** (`reporter.py`, `__main__.py`) — renders issues, handles argument parsing, determines exit code
 
 ## Features
 
@@ -69,17 +82,17 @@ server. The validator produces **0 ERROR-level issues** on all of them. Each
 warning is cross-checked against the official style sheet (`.oeis_style_sheet.txt`):
 
 | Sequence | Warnings | Fields warned |
-|---|---|---|
-| A000005 (divisors) | 24 | `%o` |
-| A000010 (totient) | 12 | `%o`, `%H` |
-| A000040 (primes) | 28 | `%o`, `%D`, `%H`, `%Y` |
-| A000041 (partitions) | 50 | `%o`, `%H` |
-| A000045 (Fibonacci) | 49 | `%o`, `%H`, `%Y` |
-| A000108 (Catalan) | 30 | `%o`, `%H`, `%F` |
-| A000203 (sigma) | 16 | `%o`, `%H`, `%Y` |
-| A000217 (triangular) | 16 | `%o`, `%Y` |
-| A000290 (squares) | 4 | `%o`, `%Y` |
-| A001222 (Omega) | 14 | `%o` |
+|---|---|---|---|
+| A000005 (divisors) | 0 | — |
+| A000010 (totient) | 1 | `%H` |
+| A000040 (primes) | 5 | `%o`, `%D`, `%H`, `%Y` |
+| A000041 (partitions) | 1 | `%H` |
+| A000045 (Fibonacci) | 2 | `%H`, `%Y` |
+| A000108 (Catalan) | 1 | `%H` |
+| A000203 (sigma) | 5 | `%o`, `%H`, `%Y` |
+| A000217 (triangular) | 3 | `%o`, `%Y` |
+| A000290 (squares) | 1 | `%Y` |
+| A001222 (Omega) | 0 | — |
 
 ## Development
 
@@ -88,7 +101,7 @@ git clone https://github.com/daedalus/oeis_validator.git
 cd oeis_validator
 pip install -e ".[test]"
 
-# run tests (218+ passing)
+# run tests (221+ passing)
 pytest -v
 
 # format
@@ -105,7 +118,7 @@ vulture --min-confidence 90 src/
 ## Threat model (adversarial tests)
 
 The test suite (`tests/test_adversarial.py`) validates the parser, rules, and
-CLI against 82 adversarial scenarios across six categories:
+CLI against 85 adversarial scenarios across six categories:
 
 | Category | Tests | Examples |
 |---|---|---|
