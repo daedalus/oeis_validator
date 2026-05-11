@@ -103,14 +103,14 @@ vulture --min-confidence 90 src/
 
 ## Threat model (adversarial tests)
 
-The test suite (`tests/test_adversarial.py`) validates the parser and validator
-against 52 adversarial scenarios across six categories:
+The test suite (`tests/test_adversarial.py`) validates the parser, rules, and
+CLI against 82 adversarial scenarios across six categories:
 
-| Category | Examples |
-|---|---|
-| **Parser** | Null bytes, BOM, mixed `\r\n`/`\n`, RTL overrides, HTML injection, shell injection, 100-term sequences, negative zero, 50 repeated `%S` lines |
-| **Rules** | Mixed valid/invalid keywords, contradictory keyword pairs, offset > sequence length, 100 cross-references with duplicates, fake language labels, URL-free references |
-| **Style** | Case-variant pattern matching, false-positive avoidance for `except for`/`its`/`p(n)` in formulas |
-| **CLI** | Binary input, empty stdin, large stdin, directory as file, weird filenames, unknown flags, multiple file args |
-| **Multi-entry** | 50-entry bulk parse, mixed keyword sets per entry |
-| **Regression** | Warning-count snapshots per data file, style-sheet field whitelist |
+| Category | Tests | Examples |
+|---|---|---|
+| **Parser** | 28 | Null bytes, BOM, mixed `\r\n`/`\n`, RTL overrides, HTML/shell injection, 100-term sequences, negative zero, 50 repeated `%S` lines, zero-width chars, Unicode normalization, deeply nested parens (5000), 10K-char fields, ASCII art in comments, case-varying tags, invalid tag chars, EOF mid-tag, backslash continuation, whitespace-only fields |
+| **Rules** | 23 | Mixed valid/invalid keywords, contradictory keyword pairs, offset > sequence length, 100/500 cross-references with/without duplicates, fake language labels, URL-free refs, all 19 tags stress test, signed programs (no false positive), cons/frac/tabl advisories, bref edge case, self-cross-ref |
+| **CLI** | 15 | Binary input, empty/large stdin, directory as file, BOM file, Latin-1 file, empty file, symlinks, unicode filenames, `--` separator, unknown flags |
+| **Style** | 9 | Case-variant pattern matching (`AllOwS tO`), false-positive avoidance for `except for`, `its`, `p(n)` in formulas, multiple patterns in one field, patterns in comments |
+| **Multi-entry** | 3 | 50-entry bulk parse, mixed keyword sets, blank-line separators |
+| **Integration** | 4 | Parse→validate→report pipeline, mixed valid/invalid entries, all 10 data files, 1000-term sequence no-crash |
