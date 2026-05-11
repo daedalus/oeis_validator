@@ -138,6 +138,86 @@ class TestParserAdversarial:
         errs = [i for i in validate(e) if i.level == "ERROR"]
         assert any("4 terms" in i.message for i in errs)
 
+    def test_zero_width_characters(self) -> None:
+        text = BASE.replace("Test", "Te\u200best\u200c")
+        e = entry_from_text(text)
+        issues = list(validate(e))
+        warns = [i for i in issues if i.level == "WARNING"]
+        assert any("Non-ASCII" in i.message for i in warns)
+
+    def test_unicode_normalization_attack(self) -> None:
+        name = "S\u00e9quence"  # NFC composed é
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 " + name + "\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        warns = [i for i in validate(e) if i.level == "WARNING"]
+        assert any("Non-ASCII" in i.message for i in warns)
+
+    def test_whitespace_only_after_tag(self) -> None:
+        text = "%I A000001\n%S A000001   \t  \n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        errs = [i for i in validate(e) if i.level == "ERROR"]
+        assert any("4 terms" in i.message for i in errs)
+
+    def test_I_with_no_anumber(self) -> None:
+        text = "%I\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        assert e.a_number == "A000001"  # picked up from %S line
+
+    def test_case_varying_tags(self) -> None:
+        text = "%I A000001\n%s A000001 1,2,3,4,5\n%N A000001 Test.\n%k A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        # LINE_RE matches %[A-Za-z] — lowercase tags ARE captured
+        assert "s" in e.fields  # %s is captured as tag 's'
+        assert "k" in e.fields  # %k is captured as tag 'k'
+        # but they aren't "S" or "K", so no sequence terms or keywords
+        assert e.sequence_terms == []
+
+    def test_invalid_tag_characters(self) -> None:
+        text = "%I A000001\n%1 A000001 junk\n%@ A000001 junk\n%! A000001 junk\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        issues = list(validate(e))
+        errs = [i for i in issues if i.level == "ERROR"]
+        # %1, %@, %! don't match LINE_RE → silently skipped
+        # only known tag warnings come from %[A-Za-z] tags
+        assert len(errs) == 0, f"Errors: {[(i.field, i.message) for i in errs]}"
+
+    def test_deeply_nested_parentheses(self) -> None:
+        deep = "(" * 5000 + "x" + ")" * 5000
+        text = f"%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 {deep}\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        issues = list(validate(e))
+        errs = [i for i in issues if i.level == "ERROR"]
+        assert len(errs) == 0
+
+    def test_very_long_field_content(self) -> None:
+        long_content = "x" * 10_000
+        text = f"%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 {long_content}\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        assert len(e.name) >= 10_000
+
+    def test_ascii_art_in_comment(self) -> None:
+        art = (
+            "  ____  \n"
+            " / ___| \n"
+            "| |  _  \n"
+            "| |_| | \n"
+            " \\____| \n"
+        )
+        text = f"%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%C A000001 {art}\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        issues = list(validate(e))
+        errs = [i for i in issues if i.level == "ERROR"]
+        assert len(errs) == 0
+
+    def test_shared_anumber_duplicate_entries(self) -> None:
+        text = (
+            "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 First.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth\n"
+            "%I A000001\n%S A000001 6,7,8,9,10\n%N A000001 Second.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        )
+        entries = parse_entries(text)
+        assert len(entries) == 1  # merged into one
+        assert "First" in entries[0].name or "Second" in entries[0].name
+
 
 # ==============================================================
 # Rules adversarial
@@ -267,6 +347,72 @@ class TestRulesAdversarial:
         o_warns = [w for w in warns if w.field == "%o"]
         assert len(o_warns) == 0
 
+    def test_self_cross_reference(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth\n%Y A000001 A000001"
+        e = entry_from_text(text)
+        warns = [i for i in validate(e) if i.level == "WARNING"]
+        self_ref = [w for w in warns if "self" in w.message.lower() or "A000001" in w.message]
+        self_ref = [w for w in self_ref if "duplicate" in w.message or "self" in w.message.lower()]
+        # self-reference is not explicitly flagged, but should not crash
+
+    def test_offset_non_integer_b(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,foo\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        assert e.offset_a == 1
+        assert e.offset_b is None  # foo can't be parsed as int
+
+    def test_cons_keyword_advisory_on_format(self) -> None:
+        text = "%I A000001\n%S A000001 3,1,4,1,5,9\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn,cons\n%A A000001 Auth"
+        e = entry_from_text(text)
+        infos = [i for i in validate(e) if i.level == "INFO"]
+        assert any("Equals" in i.message or "cons" in i.message for i in infos)
+
+    def test_frac_keyword_warns_if_no_cross_ref(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn,frac\n%A A000001 Auth"
+        e = entry_from_text(text)
+        warns = [i for i in validate(e) if i.level == "WARNING"]
+        assert any("frac" in i.message for i in warns)
+
+    def test_tabl_keyword_advisory_on_missing_e(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn,tabl\n%A A000001 Auth"
+        e = entry_from_text(text)
+        infos = [i for i in validate(e) if i.level == "INFO"]
+        assert any("tabl" in i.message or "example" in i.message.lower() for i in infos)
+
+    def test_multiple_style_patterns_in_one_field(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Counts the number of unique values, which allows to compute.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        warns = [i for i in validate(e) if i.level == "WARNING"]
+        patterns_found = set()
+        for w in warns:
+            if "counts" in w.message:
+                patterns_found.add("counts")
+            if "unique" in w.message:
+                patterns_found.add("unique")
+            if "allows us to" in w.message:
+                patterns_found.add("allows")
+        assert len(patterns_found) >= 2
+
+    def test_style_patterns_in_comments(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%C A000001 This counts the number of values.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = entry_from_text(text)
+        infos = [i for i in validate(e) if i.level == "INFO"]
+        assert any("counts" in i.message for i in infos)
+
+    def test_extremely_long_Y_line(self) -> None:
+        refs = ", ".join(f"A{i:06d}" for i in range(500))
+        text = f"%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth\n%Y A000001 {refs}"
+        e = entry_from_text(text)
+        warns = [i for i in validate(e) if i.level == "WARNING"]
+        dup_warns = [w for w in warns if "duplicate" in w.message]
+        assert len(dup_warns) == 0  # no duplicates in 1..500
+
+    def test_keyword_bref_allows_fewer_terms(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn,bref\n%A A000001 Auth"
+        e = entry_from_text(text)
+        errs = [i for i in validate(e) if i.level == "ERROR"]
+        assert len(errs) == 0  # 4 terms with bref is fine
+
 
 # ==============================================================
 # CLI adversarial
@@ -351,6 +497,67 @@ class TestCliAdversarial:
     def test_multiple_file_args(self) -> None:
         result = subprocess.run(
             [sys.executable, "-m", "oeis_validator", "file1.txt", "file2.txt"],
+            capture_output=True,
+            timeout=10,
+        )
+        assert result.returncode in (0, 1, 2)
+
+    def test_file_with_bom(self, tmp_path: Path) -> None:
+        p = tmp_path / "bom.txt"
+        p.write_bytes(b"\xef\xbb\xbf%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth")
+        result = subprocess.run(
+            [sys.executable, "-m", "oeis_validator", str(p)],
+            capture_output=True,
+            timeout=10,
+        )
+        # BOM byte prevents %I match; entry still processes but %I error raised
+        assert result.returncode == 1
+
+    def test_latin1_encoded_file(self, tmp_path: Path) -> None:
+        p = tmp_path / "latin1.txt"
+        p.write_bytes("%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth".encode("latin-1"))
+        result = subprocess.run(
+            [sys.executable, "-m", "oeis_validator", str(p)],
+            capture_output=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+
+    def test_empty_file(self, tmp_path: Path) -> None:
+        p = tmp_path / "empty.txt"
+        p.write_text("")
+        result = subprocess.run(
+            [sys.executable, "-m", "oeis_validator", str(p)],
+            capture_output=True,
+            timeout=10,
+        )
+        assert result.returncode != 0  # no valid entry
+
+    def test_symlink_to_valid_file(self, tmp_path: Path) -> None:
+        src = tmp_path / "source.txt"
+        src.write_text("%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth")
+        link = tmp_path / "link.txt"
+        link.symlink_to(src)
+        result = subprocess.run(
+            [sys.executable, "-m", "oeis_validator", str(link)],
+            capture_output=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+
+    def test_unicode_filename(self, tmp_path: Path) -> None:
+        p = tmp_path / "\u2603sequence.txt"  # snowman
+        p.write_text("%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth")
+        result = subprocess.run(
+            [sys.executable, "-m", "oeis_validator", str(p)],
+            capture_output=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+
+    def test_dash_dash_argument_separator(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "oeis_validator", "--", "nonexistent.txt"],
             capture_output=True,
             timeout=10,
         )
@@ -453,3 +660,63 @@ class TestMultiEntryAdversarial:
         assert len(entries) == 2
         assert entries[0].keywords == ["nonn"]
         assert entries[1].keywords == ["sign"]
+
+    def test_entries_separated_by_blank_lines(self) -> None:
+        text = "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 First\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth\n\n\n\n%I A000002\n%S A000002 2,4,6,8,10\n%N A000002 Second\n%O A000002 1,2\n%K A000002 nonn\n%A A000002 Auth"
+        entries = parse_entries(text)
+        assert len(entries) == 2
+
+
+# ==============================================================
+# Integration / end-to-end
+# ==============================================================
+
+
+class TestIntegration:
+    def test_parse_validate_report_with_bad_entry(self, capsys) -> None:
+        from oeis_validator.reporter import report
+
+        text = "%I A000001\n%S A000001 1,foo,3\n%N A000001 Test."
+        e = parse_entry(text)
+        issues = list(validate(e))
+        errs = [i for i in issues if i.level == "ERROR"]
+        warns = [i for i in issues if i.level == "WARNING"]
+        rc = report(e, issues)
+        captured = capsys.readouterr()
+        assert len(errs) >= 2  # missing %O, %K, %A, non-integer terms
+        assert rc == 1
+        assert "Summary" in captured.out
+
+    def test_mixed_valid_invalid_entries(self, capsys) -> None:
+        from oeis_validator.reporter import report
+
+        text = (
+            "%I A000001\n%S A000001 1,2,3,4,5\n%N A000001 Good\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth\n\n"
+            "%I A000002\n%S A000002 1,2,3\n%N A000002 Bad\n%O A000002 a,b\n%K A000002 nonn\n%A A000002 Auth"
+        )
+        entries = parse_entries(text)
+        assert len(entries) == 2
+        for e in entries:
+            issues = list(validate(e))
+            rc = report(e, issues)
+        captured = capsys.readouterr()
+        assert "Summary" in captured.out
+
+    def test_parse_validate_all_data_files(self) -> None:
+        data_dir = Path(__file__).parent.parent / "data"
+        for p in sorted(data_dir.glob("A*.txt")):
+            text = p.read_text(encoding="utf-8")
+            start = text.find("%I")
+            if start == -1:
+                continue
+            e = parse_entry(text[start:])
+            errs = [i for i in validate(e) if i.level == "ERROR"]
+            assert len(errs) == 0, f"{p.stem}: {len(errs)} errors"
+
+    def test_1000_issue_list_no_crash(self) -> None:
+        thousand = "%S A000001 " + ",".join(str(i) for i in range(1000))
+        text = f"%I A000001\n{thousand}\n%N A000001 Test.\n%O A000001 1,2\n%K A000001 nonn\n%A A000001 Auth"
+        e = parse_entry(text)
+        issues = list(validate(e))
+        errs = [i for i in issues if i.level == "ERROR"]
+        assert len(errs) == 0  # 1000 distinct terms should have no errors

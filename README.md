@@ -8,7 +8,7 @@ for compliance, consistency, and style adherence.
 [![Python](https://img.shields.io/pypi/pyversions/oeis_validator.svg)](https://pypi.org/project/oeis_validator/)
 [![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/daedalus/oeis_validator)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/master/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Tests](https://img.shields.io/badge/tests-188%20passing-brightgreen.svg)](https://github.com/daedalus/oeis_validator)
+[![Tests](https://img.shields.io/badge/tests-218%20passing-brightgreen.svg)](https://github.com/daedalus/oeis_validator)
 
 ## Features
 
@@ -87,7 +87,7 @@ git clone https://github.com/daedalus/oeis_validator.git
 cd oeis_validator
 pip install -e ".[test]"
 
-# run tests (188+ passing)
+# run tests (218+ passing)
 pytest -v
 
 # format
