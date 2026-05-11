@@ -9,6 +9,7 @@ for compliance, consistency, and style adherence.
 [![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/daedalus/oeis_validator)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/master/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Tests](https://img.shields.io/badge/tests-218%20passing-brightgreen.svg)](https://github.com/daedalus/oeis_validator)
+[![DeepWiki](https://img.shields.io/badge/docs-DeepWiki-blue.svg)](https://deepwiki.com/daedalus/oeis_validator)
 
 ## Features
 
