@@ -19,9 +19,11 @@ class Issue:
     level: str
     field: str
     message: str
+    code: str = ""
 
     def __str__(self) -> str:
-        return f"[{self.level}] {self.field}: {self.message}"
+        code_part = f" [{self.code}]" if self.code else ""
+        return f"[{self.level}]{code_part} {self.field}: {self.message}"
 
 
 @dataclass
