@@ -35,7 +35,7 @@ def _make_entry(lines: list[str]) -> OEISEntry:
         if entry.a_number is None:
             entry.a_number = anum
 
-    seq_raw = "".join(
+    seq_raw = ",".join(
         entry.fields.get("S", [])
         + entry.fields.get("T", [])
         + entry.fields.get("U", [])
