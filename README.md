@@ -82,7 +82,7 @@ server. The validator produces **0 ERROR-level issues** on all of them. Each
 warning is cross-checked against the official style sheet (`.oeis_style_sheet.txt`):
 
 | Sequence | Warnings | Fields warned |
-|---|---|---|---|
+|---|---|---|
 | A000005 (divisors) | 0 | — |
 | A000010 (totient) | 1 | `%H` |
 | A000040 (primes) | 5 | `%o`, `%D`, `%H`, `%Y` |
